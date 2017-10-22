@@ -5,8 +5,9 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.PriorityQueue;
+
 public class Viterbi {
-	// creates a new Viterbi-type gsm  
+	// creates a new Viterbi instance 
 	double[] pi;
 	double[][] A, B, score;
 	int[][] pred;
@@ -21,10 +22,9 @@ public class Viterbi {
 		if (errorCheck(pi, A, B)) {
 			throw new IllegalArgumentException();
 		}
-		
-		
 	} 
 	
+	//check validity of pi, A, B
 	boolean errorCheck(double[] pi, double[][] A, double[][] B) {
 		if (A[0].length != B.length || A.length < 1 || B[0].length < 1) {
 			return true;
@@ -92,7 +92,10 @@ public class Viterbi {
 				prob *= A[seq.get(i-1)][seq.get(i-1)] * B[seq.get(i)][omega[i]];
 			}	
 		}
-
+		
+		System.out.println("Probability of given Sequence : " + prob);
+		System.out.println();
+		
 		return prob;
 	}
 	
@@ -105,6 +108,7 @@ public class Viterbi {
 		LinkedList<Integer> best = backtrack(score, pred, true);
 		
 		//print results
+		System.out.println("Best Sequence for given omega : ");
 		printArray(best);
 		
 		return best;
@@ -118,11 +122,13 @@ public class Viterbi {
 		//backtrack with bestSeq = false
 		LinkedList<Integer> worst = backtrack(score, pred, false);
 		
+		System.out.println("Worst Sequence for given omega : ");
 		printArray(worst);
 		
 		return worst;
 	}
 	
+	//helper function to complete forward phase of the viterbi algorithm
 	void forwardStep(int[] omega, boolean best, boolean underflow) {
 		if (omega == null || omega.length == 0) {
 			throw new IllegalArgumentException();
@@ -139,7 +145,8 @@ public class Viterbi {
 		// forward phase
 		for (int t = 1; t < T; t++) {
 			for (int j = 0; j < N; j++) {
-				double tScore = best ? -1 : Double.MAX_VALUE;
+				// starting values
+				double tScore = best ? Double.NEGATIVE_INFINITY : Double.MAX_VALUE;
 				int arg = 0;
 				for (int k = 0; k < N; k++) {
 					double temp;
@@ -149,7 +156,7 @@ public class Viterbi {
 					} else {
 						temp = score[k][t-1] * A[k][j] * B[j][omega[t]];
 					}
-					if (best) {
+					if (best) { //change comparator for best, worst sequence
 						if (temp > tScore) {
 							tScore = temp;
 							arg = k;
@@ -167,6 +174,7 @@ public class Viterbi {
 		}
 	}
 	
+	//add paths by backtracking
 	LinkedList<Integer> backtrack(double[][] score, int[][] pred, boolean best) {
 		LinkedList<Integer> result = new LinkedList<>();
 		int T = score[0].length;
@@ -198,6 +206,7 @@ public class Viterbi {
 		}
 		String result = sb.toString();
 		System.out.println(result.substring(0, result.lastIndexOf(",")));
+		System.out.println();
 	}
 	
 	
@@ -232,7 +241,7 @@ public class Viterbi {
 						tScore = temp;
 						argMaxL = k;
 						argMaxR = argMaxL;
-					} else if (temp == tScore) {
+					} else if (temp == tScore) { //another high prob found
 						argMaxR = k;
 					}
 				}
@@ -260,9 +269,9 @@ public class Viterbi {
 			}
 		}
 		
-		if (diff) {
+		if (diff) { //probabilities at T have different paths
 			for (int t = T-1; t >= 1; t--) {
-				left.addFirst(lIndex);
+				left.addFirst(lIndex); 
 				right.addFirst(rIndex);
 				lIndex= predl[lIndex][t];
 				rIndex = predr[rIndex][t];
@@ -272,7 +281,7 @@ public class Viterbi {
 			
 			result.add(left);
 			result.add(right);
-		} else {
+		} else { // same index, return lower of the index
 			for (int t = T-1; t >= 1; t--) {
 				left.addFirst(lIndex);
 				lIndex= predl[lIndex][t];
@@ -282,6 +291,7 @@ public class Viterbi {
 		}
 		
 		int cnt = 1;
+		System.out.println("Best Sequence Set for given omega : ");
 		for (List<Integer> l: result) {
 			if (l != null) {
 				System.out.println("List " + cnt);
@@ -289,6 +299,7 @@ public class Viterbi {
 				cnt++;
 			}
 		}
+		System.out.println();
 		
 		return result;
 	}
@@ -318,10 +329,10 @@ public class Viterbi {
 		
 		forwardStep(omega, true, underflow);
 		
-		for (int i = 0; i < N; i++) {
+		for (int i = 0; i < N; i++) { //load all probabilities to heap
 			heap.add(score[i][T-1]);
 		}
-		if (k > heap.size()) {
+		if (k > heap.size()) { // k is greater than number of states
 			throw new IllegalArgumentException();
 		}
 		double[] maxes = new double[k];
@@ -351,7 +362,9 @@ public class Viterbi {
 		PriorityQueue<Double>[] pqList = new PriorityQueue[N];
 		for (int i = 0; i < N; i++) {
 			pqList[i] = new PriorityQueue<>(Collections.reverseOrder());
-			pqList[i].add(pi[i] * B[i][omega[0]]);
+			double initScores = underflow ? Math.log(pi[i]) + Math.log(B[i][omega[0]]) : 
+											pi[i] * B[i][omega[0]];
+			pqList[i].add(initScores);
 		}
 		
 		// forward phase
@@ -364,8 +377,10 @@ public class Viterbi {
 					ArrayList<Double> temp = new ArrayList<>();
 					while (!pqList[j].isEmpty()) {
 						double score = pqList[j].poll();
-						double tScore = score * A[i][j] * B[j][omega[t]];
-						if (tempPQ.contains(tScore)) {
+						double tScore = underflow ? score + Math.log(A[k][j]) 
+												+ Math.log(B[j][omega[t]]) : 
+											score * A[i][j] * B[j][omega[t]];
+						if (!tempPQ.contains(tScore)) {
 							tempPQ.add(tScore);
 						}
 						temp.add(score);
@@ -377,9 +392,12 @@ public class Viterbi {
 			pqList = copy;
 		}
 		
-		PriorityQueue<Double> total = new PriorityQueue<>();
+		PriorityQueue<Double> total = new PriorityQueue<>(Collections.reverseOrder());
 		for (PriorityQueue<Double> pq: pqList) {
-			total.addAll(pq);
+			while (!pq.isEmpty()) {
+				double polled = pq.poll();
+				total.add(polled);
+			}
 		}
 		
 		if (k > total.size()) {
@@ -390,10 +408,11 @@ public class Viterbi {
 		for (int i = 0; i < k; i++) {
 			result[i] = total.poll();
 		}
-		
+		System.out.println("Max Score");
 		for (double d: result) {
 			System.out.println(d);
 		}
+		System.out.println();
 		
 		return result;
 	}
